@@ -1,0 +1,47 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+}
+
+.app {
+  max-width: 900px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+.subtitle {
+  opacity: 0.7;
+  margin-top: -0.5rem;
+}
+
+.error {
+  color: #c0392b;
+}
+
+.season-picker {
+  margin-bottom: 1rem;
+  padding: 0.4rem;
+  font-size: 1rem;
+}
+
+.standings-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.standings-table th,
+.standings-table td {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.3);
+}
+
+.standings-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.standings-table tbody tr:hover {
+  background: rgba(128, 128, 128, 0.08);
+}
