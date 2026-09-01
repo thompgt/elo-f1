@@ -204,3 +204,48 @@ front-runners. This may be partly correct under the model's own stated goal
 chased further to avoid hand-tuning constants to match specific drivers'
 expected rankings rather than encoding a generalizable rule. Worth
 revisiting with more historical validation if it keeps showing up.
+
+## Addendum 2: pair-familiarity decay
+
+A long-tenured, one-sided teammate pairing (same two drivers, same team, many
+consecutive seasons, one side essentially never winning) was compounding the
+stronger driver's rating upward every single season without bound, while the
+weaker side spiraled down with no floor — a multi-season driver comparison
+(Schumacher 2000-2004) showed the expected saturate-then-plateau pattern, but
+a longer, more one-sided modern pairing did not.
+
+Root cause: standard Elo's expected-score saturation (as a rating gap grows,
+further wins from the favorite move the needle less) only bites hard at very
+large gaps under this project's `K_RACE`/`ELO_SCALE`, and a 20-24 race season
+provides enough repeated trials that even a "mostly saturated" per-race gain
+still sums to tens of points a year, indefinitely, as long as the weaker side
+never once wins. Two fixes were tried and rejected before landing on the
+real one:
+
+- *Weakening season-boundary regression* (retaining more of the prior
+  rating) was tried first, on the theory that regression was "resetting the
+  surprise" each winter and re-opening room for another season of large
+  gains. Tested and made it **worse** — weaker regression let the losing
+  side's rating carry over too, so the gap widened *faster*, not slower.
+- *Confidence-scaled regression* (regress harder for sparse/rookie ratings,
+  gentler for long track records) was considered to also help the "a bad
+  rookie season permanently drags down a strong sophomore year" problem, but
+  it pulls the long-tenured-rivalry problem in the opposite direction from
+  what it needs, so the two issues can't share this lever.
+
+The actual fix, in `elo/engine.py`'s new `PairFamiliarity` tracker: each
+teammate matchup's effective K-factor decays hyperbolically with how many
+races that *specific pair* has already raced together (`PAIR_FAMILIARITY_HALF_LIFE`
+in `elo/config.py`), down to a floor (`PAIR_FAMILIARITY_FLOOR`) so a result
+is never worth zero. This is standard statistical reasoning, not a
+per-driver rule: the first race between two new teammates is strong evidence
+about their relative gap; the 80th race confirming an already-well-established
+gap is much weaker *new* evidence, since the variance on an estimated skill
+gap shrinks as the sample size grows. A fresh pairing (new teammates,
+mid-season swaps) is unaffected — the discount is keyed to the specific pair,
+not either driver's career total. Re-verified after this change: 2017
+Ricciardo/Verstappen ordering, and the 2012/1991/2004 season-leader checks,
+all still hold; a long-dominant modern championship run's season-over-season
+Elo growth is now flatter (yearly gains roughly halved in the case checked)
+without erasing the fact that it was still a genuinely dominant, low-error
+run.

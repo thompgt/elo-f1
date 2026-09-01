@@ -34,6 +34,7 @@ def storyline_spot_check() -> None:
         ("hamilton", 2014), ("rosberg", 2014), ("hamilton", 2018),
         ("hamilton", 2016), ("button", 2011),
         ("alonso", 2012), ("senna", 1991), ("michael_schumacher", 2004),  # should rank #1 or near it in-season
+        ("max_verstappen", 2024), ("perez", 2024),  # long-tenured pairing: growth should be flattening, not compounding
     ]
     with connect() as conn:
         print(f"\n{'driver':>16} {'year':>6} {'elo_end':>9} {'elo_avg':>9} {'points':>8}")

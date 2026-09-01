@@ -10,7 +10,14 @@ import sqlite3
 
 from elo_f1.elo import penalty
 from elo_f1.elo.car_strength import get_strength_by_constructor
-from elo_f1.elo.config import INITIAL_RATING, K_CROSS, K_QUALI, K_RACE
+from elo_f1.elo.config import (
+    INITIAL_RATING,
+    K_CROSS,
+    K_QUALI,
+    K_RACE,
+    PAIR_FAMILIARITY_FLOOR,
+    PAIR_FAMILIARITY_HALF_LIFE,
+)
 from elo_f1.elo.cross_match import compute_cross_deltas
 from elo_f1.elo.expected_score import expected_score, update
 from elo_f1.elo.match import build_qualifying_matches, build_race_matches
@@ -45,6 +52,25 @@ class RatingBook:
         self.last_season[driver_id] = year
 
 
+class PairFamiliarity:
+    """Tracks how many career matches two drivers have had as teammates (or as
+    a cross-team pair), so match.py/cross_match.py can discount repeated
+    head-to-heads between the same two people — see PAIR_FAMILIARITY_HALF_LIFE
+    in elo/config.py."""
+
+    def __init__(self) -> None:
+        self.counts: dict[frozenset, int] = {}
+
+    def k_multiplier(self, driver_a: str, driver_b: str) -> float:
+        n = self.counts.get(frozenset((driver_a, driver_b)), 0)
+        decay = PAIR_FAMILIARITY_HALF_LIFE / (PAIR_FAMILIARITY_HALF_LIFE + n)
+        return PAIR_FAMILIARITY_FLOOR + (1 - PAIR_FAMILIARITY_FLOOR) * decay
+
+    def record(self, driver_a: str, driver_b: str) -> None:
+        key = frozenset((driver_a, driver_b))
+        self.counts[key] = self.counts.get(key, 0) + 1
+
+
 def _clear_derived_tables(conn: sqlite3.Connection) -> None:
     conn.execute("DELETE FROM driver_elo_history")
     conn.execute("DELETE FROM driver_elo_season_summary")
@@ -54,6 +80,7 @@ def _clear_derived_tables(conn: sqlite3.Connection) -> None:
 def run(conn: sqlite3.Connection) -> None:
     _clear_derived_tables(conn)
     book = RatingBook()
+    familiarity = PairFamiliarity()
     season_records: dict[tuple[int, str], dict] = {}
 
     races = repo.get_races_in_order(conn)
@@ -80,10 +107,11 @@ def run(conn: sqlite3.Connection) -> None:
         quali_score = {r["driver_id"]: (None, None) for r in result_rows}
 
         for m in build_qualifying_matches(quali_rows):
+            k = K_QUALI * familiarity.k_multiplier(m.driver_a, m.driver_b)
             ea = expected_score(elo_after_quali[m.driver_a], elo_after_quali[m.driver_b])
             eb = 1.0 - ea
-            elo_after_quali[m.driver_a] = update(elo_after_quali[m.driver_a], ea, m.actual_a, K_QUALI)
-            elo_after_quali[m.driver_b] = update(elo_after_quali[m.driver_b], eb, m.actual_b, K_QUALI)
+            elo_after_quali[m.driver_a] = update(elo_after_quali[m.driver_a], ea, m.actual_a, k)
+            elo_after_quali[m.driver_b] = update(elo_after_quali[m.driver_b], eb, m.actual_b, k)
             quali_score[m.driver_a] = (ea, m.actual_a)
             quali_score[m.driver_b] = (eb, m.actual_b)
 
@@ -91,10 +119,11 @@ def run(conn: sqlite3.Connection) -> None:
         race_score = {r["driver_id"]: (None, None) for r in result_rows}
 
         for m in build_race_matches(result_rows):
+            k = K_RACE * familiarity.k_multiplier(m.driver_a, m.driver_b)
             ea = expected_score(elo_after_race[m.driver_a], elo_after_race[m.driver_b])
             eb = 1.0 - ea
-            elo_after_race[m.driver_a] = update(elo_after_race[m.driver_a], ea, m.actual_a, K_RACE)
-            elo_after_race[m.driver_b] = update(elo_after_race[m.driver_b], eb, m.actual_b, K_RACE)
+            elo_after_race[m.driver_a] = update(elo_after_race[m.driver_a], ea, m.actual_a, k)
+            elo_after_race[m.driver_b] = update(elo_after_race[m.driver_b], eb, m.actual_b, k)
             race_score[m.driver_a] = (ea, m.actual_a)
             race_score[m.driver_b] = (eb, m.actual_b)
 
@@ -113,6 +142,7 @@ def run(conn: sqlite3.Connection) -> None:
             if len(rows) == 2:
                 for r in rows:
                     had_teammate[r["driver_id"]] = True
+                familiarity.record(rows[0]["driver_id"], rows[1]["driver_id"])
 
         elo_after_penalty = dict(elo_after_race)
         penalty_applied = {r["driver_id"]: 0.0 for r in result_rows}

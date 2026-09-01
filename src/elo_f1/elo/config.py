@@ -39,3 +39,20 @@ CAR_STRENGTH_QUARTILE_Z_THRESHOLD = 0.6745  # ~top/bottom 25% of a normal distri
 
 # Regression to the mean applied once at each season boundary.
 REGRESSION_FACTOR = 0.75  # fraction of prior rating retained; rest regresses to INITIAL_RATING
+
+# Familiarity discount on repeated teammate matchups (applied in elo/engine.py
+# to the matches elo/match.py produces): the FIRST time two drivers race as
+# teammates, each
+# result is strong evidence about their relative skill gap. The 80th time the
+# same two drivers race as teammates, another result confirming the
+# already-well-established gap is much weaker NEW evidence — the variance on
+# an estimated win rate shrinks as the sample size grows, so each additional
+# trial should move the estimate less. Without this, a long-running,
+# lopsided pairing (same two drivers, same team, many consecutive seasons)
+# keeps compounding the leader's rating upward every season indefinitely,
+# since nothing about repeat information should keep producing full-sized
+# updates. K for a given pair decays hyperbolically with career matches
+# already played between that specific pair, down to a floor (never zero —
+# every race is still a real result) rather than resetting between seasons.
+PAIR_FAMILIARITY_HALF_LIFE = 20.0  # career matches between a pair before K is halved
+PAIR_FAMILIARITY_FLOOR = 0.35  # minimum fraction of K retained no matter how long the rivalry runs
