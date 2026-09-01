@@ -14,19 +14,30 @@ from elo_f1.ingestion import cache
 BASE_URL = "https://api.jolpi.ca/ergast/f1"
 USER_AGENT = "Mozilla/5.0 (compatible; elo-f1-ingest/0.1; local research project)"
 PAGE_LIMIT = 100
-REQUEST_DELAY_SECONDS = 0.25
+REQUEST_DELAY_SECONDS = 1.0
+MAX_RETRIES = 6
 
 
 def _get(url: str) -> dict:
     cached = cache.get(url)
     if cached is not None:
         return cached
-    resp = httpx.get(url, headers={"User-Agent": USER_AGENT}, timeout=30.0)
-    resp.raise_for_status()
-    data = resp.json()
-    cache.put(url, data)
-    time.sleep(REQUEST_DELAY_SECONDS)
-    return data
+
+    backoff = 5.0
+    for attempt in range(MAX_RETRIES):
+        resp = httpx.get(url, headers={"User-Agent": USER_AGENT}, timeout=30.0)
+        if resp.status_code == 429:
+            retry_after = float(resp.headers.get("Retry-After", backoff))
+            time.sleep(max(retry_after, backoff))
+            backoff *= 2
+            continue
+        resp.raise_for_status()
+        data = resp.json()
+        cache.put(url, data)
+        time.sleep(REQUEST_DELAY_SECONDS)
+        return data
+
+    raise RuntimeError(f"Exceeded retries (429 Too Many Requests) for {url}")
 
 
 def _table_key(mr: dict) -> str:
