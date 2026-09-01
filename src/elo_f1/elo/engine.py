@@ -1,6 +1,13 @@
 """Single chronological pass over all races (1980-present), maintaining and
 recording driver Elo ratings. See PLAN.md section 3 for the full spec.
 
+Each season is computed entirely independently: every driver starts each
+season at INITIAL_RATING, and no rating or pair-familiarity state carries
+across a season boundary. This is a deliberate design choice (see PLAN.md
+addendum 3) — the project measures how strong a given SEASON was, not a
+career trajectory, so a season's rating should reflect only what happened
+that season, not a prior year's form (good or bad).
+
 Full recompute on every run (cheap enough not to need incremental patching):
 clears driver_elo_history / driver_elo_season_summary and rebuilds from
 race_results / qualifying_results / car_strength_weekend.
@@ -21,42 +28,31 @@ from elo_f1.elo.config import (
 from elo_f1.elo.cross_match import compute_cross_deltas
 from elo_f1.elo.expected_score import expected_score, update
 from elo_f1.elo.match import build_qualifying_matches, build_race_matches
-from elo_f1.elo.season_boundary import regress
 from elo_f1.ingestion.status_classifier import DISQUALIFIED, DRIVER_FAULT
 from elo_f1.storage import repositories as repo
 
 
 class RatingBook:
-    """Tracks each driver's current rating and the last season they raced in,
-    so season-boundary regression can be applied lazily as gaps are crossed."""
+    """Tracks each driver's current rating within a single season. A fresh
+    RatingBook is created for every season (see `run`), so every driver
+    starts here at INITIAL_RATING regardless of how any prior season went."""
 
     def __init__(self) -> None:
         self.ratings: dict[str, float] = {}
-        self.last_season: dict[str, int] = {}
 
-    def get(self, driver_id: str, year: int) -> float:
-        if driver_id not in self.ratings:
-            self.ratings[driver_id] = INITIAL_RATING
-            self.last_season[driver_id] = year
-            return self.ratings[driver_id]
+    def get(self, driver_id: str) -> float:
+        return self.ratings.setdefault(driver_id, INITIAL_RATING)
 
-        last = self.last_season[driver_id]
-        if year > last:
-            skipped = max(0, (year - last) - 1)
-            self.ratings[driver_id] = regress(self.ratings[driver_id], seasons_skipped=skipped)
-            self.last_season[driver_id] = year
-        return self.ratings[driver_id]
-
-    def set(self, driver_id: str, rating: float, year: int) -> None:
+    def set(self, driver_id: str, rating: float) -> None:
         self.ratings[driver_id] = rating
-        self.last_season[driver_id] = year
 
 
 class PairFamiliarity:
-    """Tracks how many career matches two drivers have had as teammates (or as
-    a cross-team pair), so match.py/cross_match.py can discount repeated
-    head-to-heads between the same two people — see PAIR_FAMILIARITY_HALF_LIFE
-    in elo/config.py."""
+    """Tracks how many matches two drivers have had as teammates so far THIS
+    SEASON (a fresh instance is created every season, same as RatingBook), so
+    the matches elo/match.py produces can be discounted for repeated
+    head-to-heads between the same two people within the season — see
+    PAIR_FAMILIARITY_HALF_LIFE in elo/config.py."""
 
     def __init__(self) -> None:
         self.counts: dict[frozenset, int] = {}
@@ -79,14 +75,23 @@ def _clear_derived_tables(conn: sqlite3.Connection) -> None:
 
 def run(conn: sqlite3.Connection) -> None:
     _clear_derived_tables(conn)
-    book = RatingBook()
-    familiarity = PairFamiliarity()
     season_records: dict[tuple[int, str], dict] = {}
 
     races = repo.get_races_in_order(conn)
+    book = None
+    familiarity = None
+    current_year = None
     for race in races:
         race_id = race["race_id"]
         year = race["year"]
+
+        if year != current_year:
+            # New season: reset ratings AND pair-familiarity to a clean slate.
+            # Nothing about a prior season's results or a rivalry's history
+            # carries forward — each season is judged entirely on its own.
+            book = RatingBook()
+            familiarity = PairFamiliarity()
+            current_year = year
 
         result_rows = repo.get_results_for_race(conn, race_id)
         if not result_rows:
@@ -102,7 +107,7 @@ def run(conn: sqlite3.Connection) -> None:
 
         strength_by_constructor = get_strength_by_constructor(conn, race_id)
 
-        elo_before = {r["driver_id"]: book.get(r["driver_id"], year) for r in result_rows}
+        elo_before = {r["driver_id"]: book.get(r["driver_id"]) for r in result_rows}
         elo_after_quali = dict(elo_before)
         quali_score = {r["driver_id"]: (None, None) for r in result_rows}
 
@@ -162,7 +167,7 @@ def run(conn: sqlite3.Connection) -> None:
 
         for r in result_rows:
             driver_id = r["driver_id"]
-            book.set(driver_id, elo_after_penalty[driver_id], year)
+            book.set(driver_id, elo_after_penalty[driver_id])
 
             qe, qa = quali_score[driver_id]
             re_, ra = race_score[driver_id]

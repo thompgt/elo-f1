@@ -249,3 +249,29 @@ all still hold; a long-dominant modern championship run's season-over-season
 Elo growth is now flatter (yearly gains roughly halved in the case checked)
 without erasing the fact that it was still a genuinely dominant, low-error
 run.
+
+## Addendum 3: seasons are now fully independent (no cross-season carryover)
+
+Explicit design change: every driver now starts every season at
+`INITIAL_RATING` (1500), and pair-familiarity (Addendum 2) resets to zero at
+each season boundary too. `elo/season_boundary.py` and `REGRESSION_FACTOR`
+are removed entirely — there is no more partial carryover to regress.
+
+This matches what the project actually measures: "how strong was this
+driver's season," not a career trajectory. A rookie's rough debut season
+should not permanently anchor how a strong sophomore season gets rated —
+that was an open, unresolved tension from Addendum 2 (a bad prior season
+dragging down a good current one), and full season independence resolves it
+directly rather than needing a second, competing regression rule. Concrete
+before/after: a 2025 rookie season that ended well below baseline was
+carrying roughly 50 points of deficit into the *next* season's rating under
+carryover, even while that driver was clearly winning the following season's
+head-to-head against their teammate — with independence, that season now
+correctly rates above the teammate it actually beat.
+
+`driver_elo_season_summary.elo_season_start` is now trivially 1500 for every
+driver in every season (kept as a column for schema stability / potential
+future use, not removed). `RatingBook` and `PairFamiliarity` are constructed
+fresh in `elo/engine.py`'s `run()` every time the chronological loop crosses
+into a new year, rather than carrying a single instance across the whole
+1980-present pass.

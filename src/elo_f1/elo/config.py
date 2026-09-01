@@ -37,9 +37,6 @@ CAR_STRENGTH_TOP_QUARTILE_MULTIPLIER = 1.2
 CAR_STRENGTH_BOTTOM_QUARTILE_MULTIPLIER = 0.85
 CAR_STRENGTH_QUARTILE_Z_THRESHOLD = 0.6745  # ~top/bottom 25% of a normal distribution
 
-# Regression to the mean applied once at each season boundary.
-REGRESSION_FACTOR = 0.75  # fraction of prior rating retained; rest regresses to INITIAL_RATING
-
 # Familiarity discount on repeated teammate matchups (applied in elo/engine.py
 # to the matches elo/match.py produces): the FIRST time two drivers race as
 # teammates, each
