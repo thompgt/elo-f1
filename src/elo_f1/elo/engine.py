@@ -60,10 +60,17 @@ def run(conn: sqlite3.Connection) -> None:
         race_id = race["race_id"]
         year = race["year"]
 
-        quali_rows = repo.get_qualifying_for_race(conn, race_id)
         result_rows = repo.get_results_for_race(conn, race_id)
         if not result_rows:
             continue
+
+        # Only consider qualifying entries for drivers who also appear in this
+        # weekend's race results — a driver who qualified but never raced (DNS,
+        # or a data gap) has no race-side signal to pair with theirs.
+        result_driver_ids = {r["driver_id"] for r in result_rows}
+        quali_rows = [
+            q for q in repo.get_qualifying_for_race(conn, race_id) if q["driver_id"] in result_driver_ids
+        ]
 
         strength_by_constructor = get_strength_by_constructor(conn, race_id)
 
