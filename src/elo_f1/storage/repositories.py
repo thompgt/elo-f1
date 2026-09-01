@@ -4,11 +4,13 @@ import sqlite3
 
 
 def upsert_driver(conn: sqlite3.Connection, d: dict) -> None:
+    d = {**d, "code": d.get("code")}
     conn.execute(
         """
-        INSERT INTO drivers (driver_id, given_name, family_name, date_of_birth, nationality)
-        VALUES (:driver_id, :given_name, :family_name, :date_of_birth, :nationality)
+        INSERT INTO drivers (driver_id, code, given_name, family_name, date_of_birth, nationality)
+        VALUES (:driver_id, :code, :given_name, :family_name, :date_of_birth, :nationality)
         ON CONFLICT(driver_id) DO UPDATE SET
+            code=COALESCE(excluded.code, drivers.code),
             given_name=excluded.given_name,
             family_name=excluded.family_name,
             date_of_birth=excluded.date_of_birth,

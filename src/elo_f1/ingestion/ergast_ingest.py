@@ -23,6 +23,7 @@ def _upsert_driver_and_constructor(conn: sqlite3.Connection, driver: dict, const
         conn,
         {
             "driver_id": driver["driverId"],
+            "code": driver.get("code"),
             "given_name": driver.get("givenName"),
             "family_name": driver.get("familyName"),
             "date_of_birth": driver.get("dateOfBirth"),

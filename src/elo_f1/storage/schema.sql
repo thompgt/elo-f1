@@ -2,6 +2,7 @@
 
 CREATE TABLE IF NOT EXISTS drivers (
     driver_id TEXT PRIMARY KEY,
+    code TEXT,
     given_name TEXT,
     family_name TEXT,
     date_of_birth TEXT,
