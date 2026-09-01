@@ -39,9 +39,20 @@ car strength; 2018+ additionally uses FastF1 lap-time telemetry.
 ```
 pip install -e .
 python -m elo_f1.ingestion.run_ingest --from 1980 --to 2026
+python -m elo_f1.ingestion.run_car_strength                      # Tier A, all seasons (fast, local)
+python -m elo_f1.ingestion.run_car_strength --fastf1-from 2018 --fastf1-to 2025   # Tier B, optional (slow)
 python -m elo_f1.elo.run_elo
 uvicorn elo_f1.api.main:app --reload
 ```
+
+`run_ingest` is resumable — re-running it skips seasons already marked done in
+`ingestion_progress` and retries anything that previously failed (e.g. Jolpica
+rate limits). The FastF1 telemetry pass is opt-in and heavy (one full session
+download+parse per race weekend); skip it and the Elo engine falls back to the
+Tier A proxy for those seasons.
+
+Run `python scripts/inspect_db.py` for row-count sanity checks per season and a
+spot-check of known storylines (Verstappen/Perez, Hamilton/Rosberg, Alonso/Stroll).
 
 Then, in `frontend/`:
 
