@@ -4,8 +4,23 @@ against known storylines during Stage 3 sanity checks."""
 INITIAL_RATING = 1500.0
 ELO_SCALE = 400.0
 
-K_QUALI = 8.0
-K_RACE = 16.0
+K_QUALI = 6.0
+K_RACE = 12.0
+
+# Cross-team calibration (see elo/cross_match.py): the teammate matches above
+# are an isolated two-player graph with no connection to the rest of the grid,
+# so a driver's rating only ever reflects dominance over their own teammate.
+# Cross matches pit every classified driver against every other classified
+# driver on a different team, with the expected score computed from each
+# driver's Elo *handicapped* by their car's strength that weekend
+# (CAR_TO_ELO_SCALE * strength z-score) — so a result the car alone already
+# predicted barely moves anyone's rating, and only genuine over/under-
+# performance relative to the car does. This is what gives every driver real
+# edges to the whole field, not just their own teammate, anchoring ratings to
+# a common scale. K_CROSS is kept below K_RACE since these are noisier,
+# car-strength-estimate-dependent comparisons.
+CAR_TO_ELO_SCALE = 400.0  # 1 std dev of car strength ~ a 400-point Elo edge (~91% win expectancy)
+K_CROSS = 8.0
 
 # Crash/driver-error penalty base magnitudes, by status_category / fault type.
 PENALTY_SINGLE_CAR_FAULT = 15.0  # Accident, Spun off

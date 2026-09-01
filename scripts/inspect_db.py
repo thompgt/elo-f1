@@ -29,9 +29,11 @@ def row_counts_per_season() -> None:
 def storyline_spot_check() -> None:
     storylines = [
         ("max_verstappen", 2016), ("max_verstappen", 2017), ("max_verstappen", 2023),
+        ("ricciardo", 2017),  # should now be close to / above 2017 Verstappen (avg), not far below
         ("perez", 2023), ("alonso", 2023), ("stroll", 2023),
         ("hamilton", 2014), ("rosberg", 2014), ("hamilton", 2018),
         ("hamilton", 2016), ("button", 2011),
+        ("alonso", 2012), ("senna", 1991), ("michael_schumacher", 2004),  # should rank #1 or near it in-season
     ]
     with connect() as conn:
         print(f"\n{'driver':>16} {'year':>6} {'elo_end':>9} {'elo_avg':>9} {'points':>8}")

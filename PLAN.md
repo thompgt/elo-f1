@@ -152,3 +152,55 @@ to compute and stored, so show both rather than forcing one choice.
 - After frontend: `npm run dev` + `uvicorn` running together, manually verify the
   standings table renders, sorts correctly by each column (especially Elo), and
   switching seasons works, for at least a handful of seasons across the range.
+
+## Addendum: post-launch corrections and cross-team calibration
+
+Three structural bugs surfaced during sanity-checking against known
+storylines, all now fixed in `elo/match.py` and `elo/car_strength_ergast.py`:
+
+1. **Ergast's `position` field is a classification/retirement order, not a
+   finish flag.** A DNF still gets a `position` (e.g. a lap-25 retirement can
+   still show `position=17`), with `status`/`position_text` marking it as a
+   retirement. The original match-building code used `position IS NOT NULL`
+   to mean "classified," which is true almost always — so the "one driver
+   DNF'd" branch of the race-match logic essentially never ran, and two
+   drivers where one had crashed out on lap 2 were still scored as a normal
+   finishing-order comparison. Fixed to key off `status_category` instead.
+2. **A teammate's mechanical DNF was being scored as a full win for the other
+   driver.** Once (1) was fixed, this became visible: if one driver finishes
+   and the other retires with an engine/gearbox/electrical failure, that is
+   reliability luck, not a driving-quality signal — crediting it as a win
+   re-introduces exactly the car-and-luck contamination the teammate-Elo
+   design exists to strip out. A race match is now only scored when a DNF was
+   the driver's own fault (`driver_fault`/`disqualified`); a teammate's
+   mechanical retirement produces no match at all.
+3. **The Tier A car-strength proxy's finish-vs-grid delta** had the same
+   classification bug — it was reading retirement-order numbers as if they
+   were real finishing positions. Restricted to drivers who actually finished.
+
+**Cross-team calibration (`elo/cross_match.py`).** Even with those fixed, the
+teammate-only design has a deeper limitation: it's an isolated two-player Elo
+graph. A driver's rating only ever moves relative to their own teammate, so
+two elite teammates who split results evenly stay pinned near 1500 no matter
+how good they actually are, while a driver paired with a weak teammate can
+drift far from that one reference point with nothing ever checking it against
+the rest of the grid. Added a second signal: every classified driver is also
+compared against every other classified driver on a different team that
+weekend, with the expected score computed from each driver's Elo *handicapped*
+by their car's field-relative strength that weekend
+(`CAR_TO_ELO_SCALE * strength_z`). A result the car alone already predicted
+barely moves either rating; only genuine over- or under-performance relative
+to the car does. This runs at a lower K (`K_CROSS`) than the true car-neutral
+teammate matches (`K_RACE`), since it depends on the car-strength estimate
+being roughly right rather than on identical machinery. `K_RACE`/`K_QUALI`
+were also rebalanced down slightly (16→12, 8→6) so this second signal isn't
+swamped by two-driver-pair dominance.
+
+Known open tension: even after this, some backmarker-team drivers who clearly
+outperform both their own teammate and their car's predicted finishing order
+across a season (e.g. Albon at Williams) rate above points-comparable
+front-runners. This may be partly correct under the model's own stated goal
+(reward outdriving your machinery) rather than purely a bug — it wasn't
+chased further to avoid hand-tuning constants to match specific drivers'
+expected rankings rather than encoding a generalizable rule. Worth
+revisiting with more historical validation if it keeps showing up.

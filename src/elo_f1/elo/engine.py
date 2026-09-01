@@ -10,7 +10,8 @@ import sqlite3
 
 from elo_f1.elo import penalty
 from elo_f1.elo.car_strength import get_strength_by_constructor
-from elo_f1.elo.config import INITIAL_RATING, K_QUALI, K_RACE
+from elo_f1.elo.config import INITIAL_RATING, K_CROSS, K_QUALI, K_RACE
+from elo_f1.elo.cross_match import compute_cross_deltas
 from elo_f1.elo.expected_score import expected_score, update
 from elo_f1.elo.match import build_qualifying_matches, build_race_matches
 from elo_f1.elo.season_boundary import regress
@@ -96,6 +97,13 @@ def run(conn: sqlite3.Connection) -> None:
             elo_after_race[m.driver_b] = update(elo_after_race[m.driver_b], eb, m.actual_b, K_RACE)
             race_score[m.driver_a] = (ea, m.actual_a)
             race_score[m.driver_b] = (eb, m.actual_b)
+
+        # Cross-team calibration (elo/cross_match.py): every classified driver
+        # against every other, expected score handicapped by car strength, so
+        # only over/under-performance relative to the car moves the needle.
+        cross_deltas = compute_cross_deltas(result_rows, elo_after_race, strength_by_constructor)
+        for driver_id, delta in cross_deltas.items():
+            elo_after_race[driver_id] += K_CROSS * delta
 
         had_teammate = {r["driver_id"]: False for r in result_rows}
         by_constructor: dict[str, list] = {}

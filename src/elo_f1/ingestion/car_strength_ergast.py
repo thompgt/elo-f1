@@ -12,6 +12,7 @@ import json
 import sqlite3
 import statistics
 
+from elo_f1.ingestion.status_classifier import FINISHED
 from elo_f1.storage import repositories as repo
 
 TIER = "ergast_proxy"
@@ -42,11 +43,14 @@ def compute_for_race(conn: sqlite3.Connection, race_id: str) -> None:
             best_quali_by_constructor[cid] = q["position"]
 
     # Finish-vs-grid delta proxy: average (grid - finish position) per constructor,
-    # positive means the team gained places on average that weekend.
+    # positive means the team gained places on average that weekend. Restricted
+    # to drivers who actually finished — Ergast's `position` for a DNF is a
+    # retirement-order rank, not a real finishing position, so including it here
+    # would read car pace off of who happened to retire in what order.
     grid_finish_delta: dict[str, list[float]] = {}
     for r in result_rows:
         cid = r["constructor_id"]
-        if r["grid"] is not None and r["position"] is not None:
+        if r["status_category"] == FINISHED and r["grid"] is not None and r["position"] is not None:
             grid_finish_delta.setdefault(cid, []).append(r["grid"] - r["position"])
 
     constructors = set(best_quali_by_constructor) | set(grid_finish_delta)
