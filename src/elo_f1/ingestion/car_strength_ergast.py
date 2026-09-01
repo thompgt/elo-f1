@@ -28,19 +28,65 @@ def _zscore(value: float, values: list[float]) -> float:
     return (value - mean) / stdev
 
 
+def _representative_time_ms(q) -> int | None:
+    """A driver's best time from the session(s) they actually reached: Q3 if
+    they made it that far, else Q2, else Q1. Falls back through whichever
+    columns are populated for the era (many pre-2000s seasons only have a
+    single qualifying time recorded, in q1_time_ms)."""
+    return q["q3_time_ms"] or q["q2_time_ms"] or q["q1_time_ms"]
+
+
+def _quali_strength_by_time_gap(quali_rows: list) -> dict[str, float] | None:
+    """Uses the actual qualifying time gap to pole, not ordinal position, so a
+    car that's genuinely far clear of the field (a big percentage gap) reads
+    as far stronger than one that merely edged pole in a tightly-matched
+    field — position alone can't distinguish a 0.05s pole from a 1.5s one,
+    which understates how dominant a truly dominant car was and lets its
+    driver bank spurious "beat expectation" credit in cross_match.py for
+    outcomes the car alone already fully explains. Returns None if fewer than
+    two constructors have usable time data (caller falls back to position)."""
+    best_time_by_constructor: dict[str, int] = {}
+    for q in quali_rows:
+        t = _representative_time_ms(q)
+        if t is None:
+            continue
+        cid = q["constructor_id"]
+        if cid not in best_time_by_constructor or t < best_time_by_constructor[cid]:
+            best_time_by_constructor[cid] = t
+
+    if len(best_time_by_constructor) < 2:
+        return None
+
+    pole_time = min(best_time_by_constructor.values())
+    gap_pct_by_constructor = {
+        cid: (t - pole_time) / pole_time * 100.0 for cid, t in best_time_by_constructor.items()
+    }
+    gap_values = list(gap_pct_by_constructor.values())
+    # Smaller (better) gap -> higher strength.
+    return {cid: -_zscore(gap, gap_values) for cid, gap in gap_pct_by_constructor.items()}
+
+
 def compute_for_race(conn: sqlite3.Connection, race_id: str) -> None:
     quali_rows = repo.get_qualifying_for_race(conn, race_id)
     result_rows = repo.get_results_for_race(conn, race_id)
 
-    # Qualifying gap proxy: constructor's best qualifying position that weekend,
-    # inverted and z-scored so a lower (better) position -> higher strength.
-    best_quali_by_constructor: dict[str, int] = {}
-    for q in quali_rows:
-        if q["position"] is None:
-            continue
-        cid = q["constructor_id"]
-        if cid not in best_quali_by_constructor or q["position"] < best_quali_by_constructor[cid]:
-            best_quali_by_constructor[cid] = q["position"]
+    quali_z_by_constructor = _quali_strength_by_time_gap(quali_rows)
+
+    if quali_z_by_constructor is None:
+        # Fallback for races with insufficient recorded lap times: ordinal
+        # qualifying position, inverted and z-scored (loses dominance
+        # magnitude, but better than no signal at all for those weekends).
+        best_quali_by_constructor: dict[str, int] = {}
+        for q in quali_rows:
+            if q["position"] is None:
+                continue
+            cid = q["constructor_id"]
+            if cid not in best_quali_by_constructor or q["position"] < best_quali_by_constructor[cid]:
+                best_quali_by_constructor[cid] = q["position"]
+        quali_positions = list(best_quali_by_constructor.values())
+        quali_z_by_constructor = {
+            cid: -_zscore(pos, quali_positions) for cid, pos in best_quali_by_constructor.items()
+        }
 
     # Finish-vs-grid delta proxy: average (grid - finish position) per constructor,
     # positive means the team gained places on average that weekend. Restricted
@@ -53,14 +99,9 @@ def compute_for_race(conn: sqlite3.Connection, race_id: str) -> None:
         if r["status_category"] == FINISHED and r["grid"] is not None and r["position"] is not None:
             grid_finish_delta.setdefault(cid, []).append(r["grid"] - r["position"])
 
-    constructors = set(best_quali_by_constructor) | set(grid_finish_delta)
+    constructors = set(quali_z_by_constructor) | set(grid_finish_delta)
     if len(constructors) < 2:
         return
-
-    quali_positions = list(best_quali_by_constructor.values())
-    quali_z_by_constructor = {
-        cid: -_zscore(pos, quali_positions) for cid, pos in best_quali_by_constructor.items()
-    }
 
     delta_avgs = {cid: statistics.mean(vals) for cid, vals in grid_finish_delta.items()}
     delta_values = list(delta_avgs.values())
