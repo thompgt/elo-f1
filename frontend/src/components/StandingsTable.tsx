@@ -49,6 +49,7 @@ export function StandingsTable({ rows }: { rows: StandingsRow[] }) {
   }
 
   return (
+    <div className="table-wrap">
     <table className="standings-table">
       <thead>
         <tr>
@@ -72,5 +73,6 @@ export function StandingsTable({ rows }: { rows: StandingsRow[] }) {
         ))}
       </tbody>
     </table>
+    </div>
   );
 }
