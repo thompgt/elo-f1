@@ -12,6 +12,7 @@ import sqlite3
 from pathlib import Path
 
 import fastf1
+import pandas as pd
 
 from elo_f1.storage import repositories as repo
 
@@ -49,7 +50,7 @@ def ingest_race_session(conn: sqlite3.Connection, year: int, round_: int) -> Non
     for _, lap in laps.iterrows():
         driver_id = lap.get("Driver")
         team = lap.get("Team")
-        if driver_id is None or lap.get("LapTime") is None:
+        if driver_id is None or pd.isna(lap.get("LapTime")):
             continue
         conn.execute(
             """

@@ -9,11 +9,12 @@ dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
     "pydantic>=2.6",
+    "pandas>=2.2",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
-notebooks = ["pandas>=2.2", "jupyter>=1.0"]
+notebooks = ["jupyter>=1.0"]
 
 [build-system]
 requires = ["setuptools>=68"]
