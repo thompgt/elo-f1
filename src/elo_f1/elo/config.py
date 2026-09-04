@@ -33,8 +33,11 @@ SEVERITY_MAX_MULTIPLIER = 1.0
 
 # Car-strength scaling of the penalty: a driver-fault DNF in a top-quartile car
 # is a worse signal (threw away a winning car) than in a bottom-quartile car.
-CAR_STRENGTH_TOP_QUARTILE_MULTIPLIER = 1.2
-CAR_STRENGTH_BOTTOM_QUARTILE_MULTIPLIER = 0.85
+# Kept intentionally mild: a wide spread here over-punishes frontrunners (who
+# tend to sit in stronger cars) relative to backmarkers for what is otherwise
+# the same mistake, so the gap between the two multipliers is kept modest.
+CAR_STRENGTH_TOP_QUARTILE_MULTIPLIER = 1.1
+CAR_STRENGTH_BOTTOM_QUARTILE_MULTIPLIER = 0.9
 CAR_STRENGTH_QUARTILE_Z_THRESHOLD = 0.6745  # ~top/bottom 25% of a normal distribution
 
 # Familiarity discount on repeated teammate matchups (applied in elo/engine.py
