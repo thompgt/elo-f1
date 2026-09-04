@@ -1,7 +1,8 @@
 # elo-f1
 
-**This is a private, local-only project. Do not add a git remote or push this
-repository anywhere (GitHub, GitLab, or otherwise).**
+**This is a private project (`github.com/thompgt/elo-f1`). Keep the repo
+private — don't make it public or share the data outside the existing
+remote.**
 
 ## What this is
 
@@ -53,6 +54,12 @@ Tier A proxy for those seasons.
 
 Run `python scripts/inspect_db.py` for row-count sanity checks per season and a
 spot-check of known storylines (Verstappen/Perez, Hamilton/Rosberg, Alonso/Stroll).
+
+## Notebooks
+
+`notebooks/elo_standings_by_season.ipynb` lists every season's driver
+standings ordered by end-of-season Elo, one season per cell (1980–present).
+Requires the notebook extras: `pip install -e ".[notebooks]"`.
 
 Then, in `frontend/`:
 
